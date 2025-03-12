@@ -1,0 +1,177 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)       # For plotting
+library(caret)         # For data splitting, evaluation, and tuning
+library(randomForest)  # For Random Forest model
+library(pROC)          # For ROC and AUC analysis
+library(corrplot)      # For correlation plots
+library(dplyr)         # For data manipulation
+```
+
+```{r}
+setwd("C:/Users/aaroc/MyRepos/ai-project-setup-wizards")
+data <- read.csv("./AI_Human_features_2.csv")
+```
+
+```{r}
+# Check the structure and summary of the data
+str(data)
+summary(data)
+```
+```{r}
+# Check for missing values
+cat("Number of missing values:", sum(is.na(data)), "\n")
+
+if(sum(is.na(data)) > 0) {
+  # Impute missing values using median imputation
+  impute_mod <- preProcess(data, method = "medianImpute")
+  data <- predict(impute_mod, newdata = data)
+}
+cat("Number of missing values after imputation:", sum(is.na(data)), "\n")
+```
+
+```{r}
+# Compute and visualize the correlation matrix for numeric predictors
+correlation_matrix <- cor(data[, -1])
+correlation_matrix
+```
+```{r}
+# Split the data into training (70%) and testing (30%) sets
+library(caret)
+set.seed(123)
+trainIndex <- createDataPartition(data$generated, p = 0.7, list = FALSE)
+trainData <- data[trainIndex, ]
+testData  <- data[-trainIndex, ]
+```
+
+```{r}
+# Feature scaling (center & scale) for predictors only
+# We leave the 'generated' column as is.
+preProcValues <- preProcess(trainData[, -which(names(trainData) == "generated")],
+                            method = c("center", "scale"))
+trainData_scaled <- trainData
+trainData_scaled[, -which(names(trainData) == "generated")] <- predict(preProcValues, trainData[, -which(names(trainData) == "generated")])
+testData_scaled <- testData
+testData_scaled[, -which(names(testData) == "generated")] <- predict(preProcValues, testData[, -which(names(testData) == "generated")])
+```
+
+```{r}
+# Logistic Regression ---
+# Use the scaled data with numeric target (0/1) for logistic regression
+log_model <- glm(generated ~ ., data = trainData_scaled, family = binomial)
+summary(log_model)
+```
+
+```{r}
+# Predict probabilities on the test set and classify using a 0.5 cutoff
+pred_probs_log <- predict(log_model, newdata = testData_scaled, type = "response")
+pred_classes_log <- ifelse(pred_probs_log > 0.5, 1, 0)
+
+```
+
+```{r}
+cm_log <- confusionMatrix(as.factor(pred_classes_log), as.factor(testData_scaled$generated))
+print(cm_log)
+```
+```{r}
+# Plot ROC curve and compute AUC for logistic regression
+roc_log <- roc(testData_scaled$generated, pred_probs_log)
+plot(roc_log, main = "ROC Curve for Logistic Regression")
+auc_log <- auc(roc_log)
+print(paste("Logistic Regression AUC:", round(auc_log, 3)))
+```
+
+```{r}
+# For caret’s tuning, convert the target to a factor with descriptive labels.
+# Create copies of the scaled data with factor targets.
+trainDataFactor <- trainData_scaled
+testDataFactor  <- testData_scaled
+trainDataFactor$generated <- factor(ifelse(trainDataFactor$generated == 1, "AI", "Human"))
+testDataFactor$generated  <- factor(ifelse(testDataFactor$generated == 1, "AI", "Human"))
+
+```
+
+```{r}
+# Train a basic Random Forest model
+rf_model <- randomForest(generated ~ ., data = trainDataFactor, ntree = 100)
+rf_pred <- predict(rf_model, newdata = testDataFactor)
+cm_rf <- confusionMatrix(rf_pred, testDataFactor$generated)
+print(cm_rf)
+```
+```{r}
+# ROC analysis for Random Forest
+rf_pred_probs <- predict(rf_model, newdata = testDataFactor, type = "prob")[, "AI"]
+roc_rf <- roc(response = testDataFactor$generated, predictor = rf_pred_probs, levels = c("Human", "AI"))
+plot(roc_rf, main = "ROC Curve for Random Forest")
+auc_rf <- auc(roc_rf)
+print(paste("Random Forest AUC:", round(auc_rf, 3)))
+```
+
+```{r}
+# --- 5c. Hyperparameter Tuning for Random Forest using caret ---
+control <- trainControl(method = "cv", 
+                        number = 5, 
+                        search = "grid", 
+                        classProbs = TRUE, 
+                        summaryFunction = twoClassSummary)
+
+tunegrid <- expand.grid(.mtry = c(2, 3, 4, 5))
+
+set.seed(123)
+rf_tuned <- train(generated ~ ., 
+                  data = trainDataFactor, 
+                  method = "rf", 
+                  metric = "ROC", 
+                  tuneGrid = tunegrid, 
+                  trControl = control)
+print(rf_tuned)
+
+```
+```{r}
+# Predict on the test set using the tuned model and evaluate performance
+rf_tuned_pred <- predict(rf_tuned, newdata = testDataFactor)
+cm_rf_tuned <- confusionMatrix(rf_tuned_pred, testDataFactor$generated)
+print(cm_rf_tuned)
+```
+```{r}
+# ROC and AUC for the tuned Random Forest
+rf_tuned_pred_probs <- predict(rf_tuned, newdata = testDataFactor, type = "prob")[, "AI"]
+roc_rf_tuned <- roc(response = testDataFactor$generated, 
+                    predictor = rf_tuned_pred_probs, 
+                    levels = c("Human", "AI"))
+plot(roc_rf_tuned, main = "ROC Curve for Tuned Random Forest")
+auc_rf_tuned <- auc(roc_rf_tuned)
+print(paste("Tuned Random Forest AUC:", round(auc_rf_tuned, 3)))
+```
+```{r}
+# Create a calibration data frame with predicted probabilities and observed classes.
+# Note: testDataFactor$generated is a factor with levels "AI" and "Human".
+# Compute predicted probabilities for the tuned model on the test set
+rf_tuned_pred_probs <- predict(rf_tuned, newdata = testDataFactor, type = "prob")[, "AI"]
+
+
+calib_data <- data.frame(
+  predicted = rf_tuned_pred_probs, 
+  observed = testDataFactor$generated
+)
+
+# Generate the calibration curve using caret's calibration function.
+# Here, we define 10 bins for the predicted probabilities.
+cal_curve <- calibration(observed ~ predicted, data = calib_data, class = "AI", cuts = 10)
+
+# Plot the calibration curve.
+plot(cal_curve, main = "Calibration Curve for Tuned Random Forest Model")
+
+```
+
+
+```{r}
+saveRDS(rf_tuned, "rf_tuned_model.rds")
+saveRDS(preProcValues, "preProcValues.rds")
+
+```
+

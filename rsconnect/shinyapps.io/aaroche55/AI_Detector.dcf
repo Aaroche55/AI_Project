@@ -1,0 +1,13 @@
+name: AI_Detector
+title: AI_Detector
+username: aaroche55
+account: aaroche55
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14164083
+bundleId: 9895501
+url: https://aaroche55.shinyapps.io/AI_Detector/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|AI_Human_features.csv|Model.nb.html|Model.Rmd|prediction_script.R|README.md|visualisation.nb.html|visualisation.Rmd

@@ -1,0 +1,169 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+data <- read.csv("C:/Users/aaroc/Downloads/AI_Human_features.csv")
+```
+
+```{r}
+head(data)
+str(data)
+```
+```{r}
+# remove the num_chars feature
+data <- data[,-1]
+head(data)
+str(data)
+```
+```{r}
+# Correlation matrix
+library(ggcorrplot)
+
+# Ensure df is a proper data frame
+df <- as.data.frame(df)  # Convert to data frame if necessary
+
+# Compute the correlation matrix using only numeric variables
+numeric_df <- df[, sapply(df, is.numeric)]  # Select numeric columns
+cor_matrix <- cor(numeric_df, use = "complete.obs")  # Ignore missing values
+
+# Plot the correlation heatmap
+ggcorrplot(cor_matrix, 
+           method = "square",  # Change from "color" to "square"
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           colors = c("blue", "white", "red"), 
+           title = "Feature Correlation Heatmap", 
+           ggtheme = theme_minimal())
+
+```
+```{r}
+library(ggplot2)
+
+ggplot(df, aes(x = lexical_diversity, fill = as.factor(generated))) +
+  geom_histogram(alpha = 0.6, bins = 30, position = "identity") +
+  labs(title = "Lexical Diversity Distribution", x = "Lexical Diversity", y = "Count", fill = "Generated") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(df, aes(x = entropy, fill = as.factor(generated))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Entropy", x = "Entropy", fill = "Generated") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(df, aes(x = as.factor(generated), y = misspelling_rate, fill = as.factor(generated))) +
+  geom_boxplot() +
+  labs(title = "Misspelling Rate by Text Type", x = "Generated (0=Human, 1=AI)", y = "Misspelling Rate") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(df, aes(x = zipf_adherence, y = ai_words_rate, color = as.factor(generated))) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Zipf Adherence vs AI Words Rate", x = "Zipf Adherence", y = "AI Words Rate", color = "Generated") +
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(df, aes(x = cut(phrase_repetition, breaks = 5), fill = as.factor(generated))) +
+  geom_bar(position = "fill") +
+  labs(title = "Proportion of AI vs. Human Text by Phrase Repetition", x = "Phrase Repetition (Binned)", y = "Proportion", fill = "Generated") +
+  theme_minimal()
+
+```
+
+```{r}
+install.packages("ggridges")  # If not already installed
+library(ggridges)
+library(ggplot2)
+
+ggplot(df, aes(x = entropy, y = as.factor(generated), fill = as.factor(generated))) +
+  geom_density_ridges(alpha = 0.7, scale = 1.2) +
+  labs(title = "Ridgeline Plot: Entropy Distribution",
+       x = "Entropy", y = "Generated (0 = Human, 1 = AI)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+install.packages("qgraph")
+library(qgraph)
+
+# Compute correlation matrix
+cor_matrix <- cor(df[, sapply(df, is.numeric)], use = "complete.obs")
+
+# Create a network graph of correlations
+qgraph(cor_matrix, layout = "spring", labels = colnames(df), theme = "colorblind")
+
+```
+
+```{r}
+install.packages("gifski")
+library(gifski)
+library(gganimate)
+library(ggplot2)
+
+# Create the scatter plot with animation
+p <- ggplot(df, aes(x = zipf_adherence, y = ai_words_rate, color = as.factor(generated))) +
+  geom_point(alpha = 0.7, size = 3) +
+  labs(title = 'AI vs. Human Text Analysis: Frame {frame}', x = 'Zipf Adherence', y = 'AI Words Rate') +
+  theme_minimal() +
+  transition_states(generated, transition_length = 2, state_length = 1) +
+  ease_aes('linear')
+
+# Animate the plot
+anim <- animate(p, duration = 5, fps = 10, width = 600, height = 400)
+
+# Check if the animation renders in RStudio viewer
+anim
+
+
+
+# Use the generated PNG files and convert them into a GIF
+png_files <- list.files(pattern = "gganim_plot.*\\.png")  # List of saved PNG files
+
+# Create GIF from the PNG files
+gifski(png_files, gif_file = "animated_scatter_plot.gif", width = 600, height = 400, delay = 1/10)
+
+# Now you have the animated GIF saved as "animated_scatter_plot.gif"
+
+
+```
+```{r}
+install.packages("hexbin")
+library(hexbin)
+
+ggplot(df, aes(x = lexical_diversity, y = entropy)) +
+  geom_hex(bins = 30) +
+  scale_fill_viridis_c() +  # Uses a beautiful color scale
+  labs(title = "Hexbin Density Plot: Lexical Diversity vs. Entropy", x = "Lexical Diversity", y = "Entropy") +
+  theme_minimal()
+
+```
+ 
+```{r}
+install.packages("GGally")
+library(GGally)
+
+ggparcoord(df, columns = 1:6, groupColumn = "generated", alpha = 0.5) +
+  labs(title = "Parallel Coordinates Plot: AI vs. Human Features") +
+  theme_minimal()
+
+```
+ 
+
+```{r}
+
+
+
+```
+ 
+ 
